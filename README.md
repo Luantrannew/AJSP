@@ -150,10 +150,18 @@ AJSP includes comprehensive error handling mechanisms:
 - Integration of an email alert system
 - Development of a user interface for management and monitoring
 
-## 👥 Contribution
+## 👤 Author
+Luan Tran - Data Engineer
 
-Contributions to the project are always welcome! Please create a pull request or issue to discuss proposed changes.
+# 🔐 Usage Permissions
+This project is proprietary software developed for internal use. To use, modify, or distribute this software:
 
+Written permission must be obtained from the author
+All usage must include proper attribution to the original author
+Any derivative work must clearly state it is based on this project
+Commercial usage is strictly prohibited without explicit licensing agreement
+
+Please contact the author at example@email.com for permission requests.
 ---
 
 <p align="center">Developed with ❤️ for efficient job data collection</p>
