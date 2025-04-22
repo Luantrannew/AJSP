@@ -161,7 +161,7 @@ All usage must include proper attribution to the original author
 Any derivative work must clearly state it is based on this project
 Commercial usage is strictly prohibited without explicit licensing agreement
 
-Please contact the author at example@email.com for permission requests.
+Please contact the author at tranduyluantranduyluan@gmail.com for permission requests    .
 ---
 
 <p align="center">Developed with ❤️ for efficient job data collection</p>
