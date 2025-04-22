@@ -31,6 +31,9 @@ Folder system
 │   │   │   │   │   ├── Detailview_attempt.csv
 ```
 
+![image](https://github.com/user-attachments/assets/58c9d3a0-aa73-4f02-b9f0-d1527a16aeeb)
+
+
 ## 🚀 Operational Process
 
 1. **Data collection**: Scripts extract data from Facebook, LinkedIn, and VietnamWorks
@@ -150,10 +153,6 @@ AJSP includes comprehensive error handling mechanisms:
 ## 👥 Contribution
 
 Contributions to the project are always welcome! Please create a pull request or issue to discuss proposed changes.
-
-## 📄 License
-
-Distributed under the [MIT](LICENSE) license.
 
 ---
 
