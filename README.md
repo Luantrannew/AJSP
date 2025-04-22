@@ -131,6 +131,9 @@ The system uses the `update_scrape.py` script to coordinate the entire process:
 
 ## 📈 Monitoring and Reporting
 
+![image](https://github.com/user-attachments/assets/caedba50-70da-42b5-bb06-2ed298b96c0d)
+
+
 The system provides detailed reports on:
 - Execution time for each script
 - Total number of scripts run successfully/failed
