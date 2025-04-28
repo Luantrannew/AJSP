@@ -61,7 +61,7 @@ def write_start_log(log_id, scraping_type, keywords=""):
     return log_id
 
 # Function to write an end log entry
-def write_end_log(log_id, scraping_type, start_time, status, total_keywords=0, total_jobs=0,new_jobs=0, error_count=0, error_details="", keywords=""):
+def write_end_log(log_id, scraping_type, start_time, status, total_keywords=0, total_jobs=0, new_jobs=0, error_count=0, error_details="", keywords=""):
     end_time = datetime.now()
     start_datetime = datetime.strptime(start_time, '%Y-%m-%d %H:%M:%S')
     duration = int((end_time - start_datetime).total_seconds())
@@ -95,8 +95,6 @@ base_save_dir = r'C:\working\job_rcm\data\facebook'
 image_save_dir = os.path.join(base_save_dir, 'post_image')
 csv_file_path = os.path.join(base_save_dir, 'post_ids.csv')
 group_href_csv_path = os.path.join(base_save_dir, 'group_href.csv')
-
-
 
 
 ########################################################
@@ -144,21 +142,27 @@ if not os.path.exists(image_save_dir):
 # Đọc danh sách post_id đã thu thập từ CSV
 def read_post_ids_from_csv():
     if not os.path.exists(csv_file_path):
-        return set()  # Trả về set rỗng nếu file chưa tồn tại
-    post_ids = set()  # Đảm bảo biến post_ids là kiểu set
+        return set()
+    post_ids = set()
     with open(csv_file_path, 'r', newline='', encoding='utf-8') as file:
         reader = csv.reader(file)
         next(reader, None)  # Bỏ qua tiêu đề
         for row in reader:
-            if row:  # Kiểm tra nếu row không rỗng
-                post_ids.add(row[0])  # Lưu post_id vào set
+            if len(row) >= 2:  # Đảm bảo có ít nhất 2 cột
+                post_ids.add(row[1])  # Lấy post_id từ cột thứ hai
     return post_ids
 
 # Lưu post_id vào CSV kèm theo scrape_date
-def save_post_id_to_csv(group_href,post_id):
+def save_post_id_to_csv(group_href, post_id):
+    # Kiểm tra xem file đã tồn tại chưa
+    file_exists = os.path.exists(csv_file_path)
+    
     with open(csv_file_path, 'a', newline='', encoding='utf-8') as file:
         writer = csv.writer(file)
-        writer.writerow([group_href,post_id, datetime.now().strftime('%Y-%m-%d %H:%M:%S')])
+        # Nếu file chưa tồn tại, thêm header
+        if not file_exists:
+            writer.writerow(["group_href", "post_id", "scrape_date"])
+        writer.writerow([group_href, post_id, datetime.now().strftime('%Y-%m-%d %H:%M:%S')])
 
 # Hàm chuyển đổi struct_time thành đối tượng datetime
 def convert_scrape_time(scrape_time):
@@ -312,6 +316,9 @@ options.add_extension(pluginfile)
 cookie_file = r"C:\working\job_rcm\job_rcm_code\job_scraping\facebook\facebook_cookies.json"
 
 
+# Biến toàn cục để theo dõi số lượng job
+total_jobs_global = 0
+new_jobs_global = 0
 
 def extract_post_id(post_href):
     """Hàm trích xuất post_id từ URL bài viết"""
@@ -319,7 +326,7 @@ def extract_post_id(post_href):
     return match.group(1) if match else None
 
 def scrape_post(driver, element, actions, group_href):
-    global post_id_list
+    global post_id_list, total_jobs_global, new_jobs_global
     """Hàm để lấy thông tin bài viết từ một phần tử web"""
     scrape_time = time.localtime()  # Ghi lại thời gian scrape
     actions.move_to_element(element).perform()
@@ -332,10 +339,16 @@ def scrape_post(driver, element, actions, group_href):
         post_href_value = post_href_element.get_attribute('href')
         post_id = extract_post_id(post_href_value)
 
+        # Cập nhật tổng số job đã quét
+        total_jobs_global += 1
+
         # Kiểm tra trùng lặp dựa trên post_id
         if post_id in post_id_list:
             print(f"Bỏ qua bài viết trùng lặp: {post_id}")
             return None
+        else:
+            # Nếu là post mới, tăng biến đếm new_jobs
+            new_jobs_global += 1
     except NoSuchElementException:
         post_href_value = None
         post_id = None
@@ -354,7 +367,7 @@ def scrape_post(driver, element, actions, group_href):
     
     if len(current_tabs) > 2:
         driver.switch_to.window(current_tabs[-1])
-        try :
+        try:
                 profile_elements = driver.find_elements(By.CSS_SELECTOR, 'a.x1i10hfl.xjbqb8w.x1ejq31n.xd10rxx')
                 hr_id_value = profile_elements[6].get_attribute('href')
         except:
@@ -412,21 +425,21 @@ def scrape_post(driver, element, actions, group_href):
     image_urls = [img.get_attribute('src') for img in image_elements if img.get_attribute('width') and img.get_attribute('height') and int(img.get_attribute('width')) > 300 and int(img.get_attribute('height')) > 300]
     
 
-    save_post_id_to_csv(group_href,post_id)
+    save_post_id_to_csv(group_href, post_id)
     # Lưu post_id vào danh sách để tránh trùng lặp
     post_id_list.add(post_id)
 
     # Lưu dữ liệu bài viết
     post_data = {
-					'post_href': post_href_value,
-					'author_name': author_name_value,
-					'hr_id': hr_id_value,
-					'group_id': group_href,
-					'scrape_date': time.strftime('%Y-%m-%d %H:%M:%S'),
-					'post_date': post_date_value,
-					'content': content_value,
-					'images': image_urls
-		}
+                    'post_href': post_href_value,
+                    'author_name': author_name_value,
+                    'hr_id': hr_id_value,
+                    'group_id': group_href,
+                    'scrape_date': time.strftime('%Y-%m-%d %H:%M:%S'),
+                    'post_date': post_date_value,
+                    'content': content_value,
+                    'images': image_urls
+        }
     
     # Lưu dữ liệu vào file
     post_html = element.get_attribute('outerHTML')
@@ -456,17 +469,16 @@ def load_fb_config(config_file):
                 config[key.strip()] = value.strip()
     return config
 
-config = load_fb_config("C:\working\job_rcm\job_rcm_code\job_scraping\facebook\fb_config.txt")
+config = load_fb_config(r"C:\working\job_rcm\job_rcm_code\job_scraping\facebook\fb_config.txt")
 email_value = config.get("email")
 password_value = config.get("password")
-
 
 
 # Launch browser
 driver = webdriver.Chrome(chrome_driver_path, options=options)
 driver.get("http://www.facebook.com")
 
-# Load cookies nếu có	
+# Load cookies nếu có    
 try:
     with open(cookie_file, "r") as file:
         cookies = json.load(file)
@@ -536,72 +548,142 @@ write_end_log(
 ####### Scraping logic #################################
 ########################################################
 
-login_log_id = generate_log_id("DTL")
-login_start_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-write_start_log(login_log_id, "Detail", "Facebook")
+scrape_log_id = generate_log_id("DTL")
+scrape_start_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+write_start_log(scrape_log_id, "Detail", "Facebook")
 
 # Duyệt qua các nhóm
 group_href = get_next_group_href()
 post_id_list = read_post_ids_from_csv()
 
+# Biến để theo dõi tổng số nhóm đã quét
+processed_groups = 0
+error_count = 0
+error_details = []
+
+# Reset biến toàn cục cho mỗi lần chạy
+total_jobs_global = 0
+new_jobs_global = 0
+
 while group_href:
+    # Tạo log ID cho mỗi nhóm
+    group_log_id = generate_log_id("GRP")
+    group_start_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    write_start_log(group_log_id, "Group", group_href)
+    
+    # Reset biến đếm cho nhóm hiện tại
+    group_total_jobs = 0
+    group_new_jobs = 0
+    group_error_count = 0
+    group_error_details = []
+    
     print(f"Đang truy cập nhóm: {group_href}")
-    post_id_list = read_post_ids_from_csv()
-    driver.execute_script(f"window.open('{group_href}');")
-    driver.switch_to.window(driver.window_handles[-1])
-    driver.execute_script("document.body.style.zoom='60%'")
+    
+    try:
+        driver.execute_script(f"window.open('{group_href}');")
+        driver.switch_to.window(driver.window_handles[-1])
+        driver.execute_script("document.body.style.zoom='60%'")
 
-    post_count = 0  # Reset post count mỗi lần đổi nhóm
-    actions = ActionChains(driver)
+        post_count = 0  # Reset post count mỗi lần đổi nhóm
+        actions = ActionChains(driver)
 
-    # n = input("Nhập số bài đăng cần lấy từ mỗi group (mặc định là 5): ")
-    # n = int(n) if n.strip().isdigit() else 5
-    n = 5
+        # n = input("Nhập số bài đăng cần lấy từ mỗi group (mặc định là 5): ")
+        # n = int(n) if n.strip().isdigit() else 5
+        n = 5
 
-
-
-    while post_count < n:  # Số lượng bài cần thu thập trước khi đổi nhóm
-        try:
-            feed_element = driver.find_element(By.XPATH, '//*[@role="feed"]')
-            post_elements = driver.find_elements(By.XPATH, "//div[@class='x1yztbdb x1n2onr6 xh8yej3 x1ja2u2z']")
-            for element in post_elements:
+        while post_count < n:  # Số lượng bài cần thu thập trước khi đổi nhóm
+            try:
+                feed_element = driver.find_element(By.XPATH, '//*[@role="feed"]')
+                post_elements = driver.find_elements(By.XPATH, "//div[@class='x1yztbdb x1n2onr6 xh8yej3 x1ja2u2z']")
                 
-                post_data = scrape_post(driver, element, actions, group_href)
-                print(post_data)
+                # Biến để đếm bài viết đã xử lý trong lần quét này
+                processed_count = 0
                 
-								
-                time.sleep(1)
-                post_count += 1
-                print(f"Đã thu thập {post_count} bài trong nhóm {group_href}")
-                if post_count >= n:
+                for element in post_elements:
+                    # Lưu lại giá trị trước khi gọi hàm
+                    old_total = total_jobs_global
+                    old_new = new_jobs_global
+                    
+                    post_data = scrape_post(driver, element, actions, group_href)
+                    print(post_data)
+                    
+                    # Nếu post_data không phải None (tức là không bị trùng)
+                    if post_data is not None:
+                        processed_count += 1
+                    
+                    # Cập nhật đếm cho nhóm hiện tại
+                    group_total_jobs += (total_jobs_global - old_total)
+                    group_new_jobs += (new_jobs_global - old_new)
+                    
+                    time.sleep(1)
+                    post_count += 1
+                    print(f"Đã thu thập {post_count} bài trong nhóm {group_href}")
+                    if post_count >= n:
+                        break
+                
+                # Nếu không có bài nào được xử lý trong lần quét này, hoặc đã đủ n bài, thoát vòng lặp
+                if processed_count == 0 or post_count >= n:
                     break
-        except Exception as e:
-            print(f"Lỗi khi thu thập bài viết: {e}")
+                    
+            except Exception as e:
+                error_msg = f"Lỗi khi thu thập bài viết: {str(e)}"
+                print(error_msg)
+                group_error_count += 1
+                group_error_details.append(error_msg)
+                error_count += 1
+                error_details.append(error_msg)
+            
+            # Cuộn xuống để tải thêm bài
+            driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+            time.sleep(5)
         
-        # Cuộn xuống để tải thêm bài
-        driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
-        time.sleep(5)
-    
-    print(f"Hoàn thành nhóm {group_href}, cập nhật last_scraped và chuyển sang nhóm tiếp theo...")
-    update_last_scraped(group_href)
-    driver.close()
-    driver.switch_to.window(driver.window_handles[0])
-    
-    group_href = get_next_group_href()
+        # Ghi log kết thúc cho nhóm
+        write_end_log(
+            group_log_id,
+            "Group",
+            group_start_time,
+            "Success",
+            total_keywords=0,
+            total_jobs=group_total_jobs,
+            new_jobs=group_new_jobs,
+            error_count=group_error_count,
+            error_details="; ".join(group_error_details[-5:]) if group_error_details else "",
+            keywords=group_href
+        )
+        # Cập nhật thời gian đã quét nhóm
+        update_last_scraped(group_href)
+        processed_groups += 1
+        print(f"Đã hoàn tất nhóm: {group_href}")
+    except Exception as e:
+        error_msg = f"Lỗi khi truy cập nhóm: {str(e)}"
+        print(error_msg)
+        group_error_count += 1
+        group_error_details.append(error_msg)
+        error_count += 1
+        error_details.append(error_msg)
+    finally:
+        # Đóng tab nhóm hiện tại
+        driver.close()
+        driver.switch_to.window(driver.window_handles[0])
 
-print("Không còn nhóm nào để thu thập, dừng chương trình.")
-driver.quit()
+        
+        # Lấy nhóm tiếp theo
+        group_href = get_next_group_href()     
 
-# Ghi log kết thúc thu thập
+# Viết log kết thúc quá trình scraping
 write_end_log(
-    login_log_id,
+    scrape_log_id,
     "Detail",
-    login_start_time,
+    scrape_start_time,
     "Success",
-    total_keywords=0,
-    total_jobs=0,
-    new_jobs=0,
-    error_count=0,
-    error_details="",
+    total_keywords=processed_groups,
+    total_jobs=total_jobs_global,
+    new_jobs=new_jobs_global,
+    error_count=error_count,
+    error_details="; ".join(error_details[-5:]) if error_details else "",
     keywords=""
 )
+
+# Đóng trình duyệt khi đã xử lý xong tất cả các nhóm
+print("Đã xử lý xong tất cả các nhóm!")
+driver.quit()
