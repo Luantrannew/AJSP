@@ -19,6 +19,18 @@ import csv
 import gspread
 from google.oauth2 import service_account
 
+
+def get_job_id(job_link):
+    """Trích xuất job ID từ LinkedIn job URL"""
+    if not job_link or not isinstance(job_link, str):
+        return None
+    match = re.search(r'view/(\d+)/', job_link)
+    if match:
+        return match.group(1)  # Lấy số job_id
+    return None
+
+
+
 # Google Sheet setup
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
 SERVICE_ACCOUNT_FILE = r'C:\working\job_rcm\job_rcm_code\job_scraping\job-rcm-luan-0e530aa9b6a0.json'
@@ -200,12 +212,12 @@ def load_ld_config(config_file):
     config = {}
     with open(config_file, 'r') as file:
         for line in file:
-            if "=" in line:
+            if "=" in line:              
                 key, value = line.strip().split("=", 1)
                 config[key.strip()] = value.strip()
     return config
 
-config = load_fb_config("C:\working\job_rcm\job_rcm_code\job_scraping\linkedin\linkedin_config.txt")
+config = load_ld_config(r"C:\working\job_rcm\job_rcm_code\job_scraping\linkedin\linkedin_config.txt")
 email_value = config.get("email")
 password_value = config.get("password")
 
@@ -260,7 +272,6 @@ write_end_log(
 base_save_dir = r'C:\working\job_rcm\data\linkedin'
 list_info_all = os.path.join(base_save_dir, "list_info_all.csv")
 
-
 # Lấy thời gian hiện tại
 now = datetime.now()
 year = now.strftime("%Y")
@@ -306,31 +317,30 @@ list_info_done_path = os.path.join(attempt_dir, "list_info_done.csv")
 detailview_attempt_path = os.path.join(attempt_dir, "detailview_attempt.csv")
 
 
+
 # Đảm bảo file JSON tồn tại
 json_file_path = os.path.join(listview_dir, "data.json")
 if not os.path.exists(json_file_path):
     with open(json_file_path, "w", encoding="utf-8") as f:
         json.dump({}, f, indent=4, ensure_ascii=False)
 
-# Nếu CSV chưa có, tạo file với tiêu đề cột
+# list_info_attempt.csv
 if not os.path.exists(list_info_attempt_path):
     with open(list_info_attempt_path, "w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
-        writer.writerow(["page", "job_index", "job_link"])  # Tiêu đề cột
+        writer.writerow(["page", "job_index", "job_link", "job_id"])
 
 # Nếu CSV chưa có, tạo file với tiêu đề cột
 if not os.path.exists(list_info_done_path):
     with open(list_info_done_path, "w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
-        writer.writerow(["job_link"])  # Tiêu đề cột
+        writer.writerow(["job_link", "job_id"])
 
 # Nếu CSV chưa có, tạo file với tiêu đề cột
 if not os.path.exists(detailview_attempt_path):
     with open(detailview_attempt_path, "w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
-        writer.writerow(["job_link", "job_name", "job_status", "region", "company_name", "company_href", "scrape_date", "hr_id", "jd"])  # Tiêu đề cột
-
-
+        writer.writerow(["job_link", "job_id", "job_name", "job_status", "region", "company_name", "company_href", "scrape_date", "hr_id", "jd"])
 def get_job_links(page, keyword):
     global listview_error_count, listview_errors
     
@@ -509,38 +519,48 @@ new_jobs = 0
 try:
     list_info_all_path = r'C:\working\job_rcm\data\linkedin\list_info_all.csv'
     
-    # Make sure the all info file exists
+    # Make sure the all info file exists and has the right columns
     if not os.path.exists(list_info_all_path):
         with open(list_info_all_path, "w", newline="", encoding="utf-8") as f:
             writer = csv.writer(f)
-            writer.writerow(["job_link"])  # Tiêu đề cột
+            writer.writerow(["job_link", "job_id"])
     
+    # Read the attempt file
     list_info_attempt = pd.read_csv(list_info_attempt_path)
+    
+    # Add job_id column to attempt data if it doesn't exist
+    if 'job_id' not in list_info_attempt.columns:
+        list_info_attempt['job_id'] = list_info_attempt['job_link'].apply(get_job_id)
+    
+    # Read the all jobs file
     list_info_all = pd.read_csv(list_info_all_path)
+    
+    # Add job_id column to all data if it doesn't exist
+    if 'job_id' not in list_info_all.columns:
+        list_info_all['job_id'] = list_info_all['job_link'].apply(get_job_id)
+        # Save updated all data with job_id column
+        list_info_all.to_csv(list_info_all_path, index=False)
 
     # Update total jobs count
     total_jobs = len(list_info_attempt)
 
-    # Chuyển cột job_link thành tập hợp để tăng hiệu suất so sánh
-    job_links_all = set(list_info_all['job_link'])
-
-    # Lọc ra các dòng chỉ có trong list_info_attempt nhưng không có trong list_info_all
-    list_info_add = list_info_attempt[~list_info_attempt['job_link'].isin(job_links_all)]
-
+    # Create a set of existing job IDs for efficient comparison
+    job_ids_all = set(list_info_all['job_id'].dropna())
+    # Filter out jobs that already exist in list_info_all based on job_id
+    list_info_add = list_info_attempt[~list_info_attempt['job_id'].isin(job_ids_all)]
     # Update new jobs count
     new_jobs = len(list_info_add)
-
     list_info_add_path = os.path.join(attempt_dir, "list_info_add.csv")
-
-    # Lưu kết quả vào file list_info_add.csv
+    # Save the result to list_info_add.csv
     list_info_add.to_csv(list_info_add_path, index=False)
 
-    print(f"Đã lưu danh sách mới vào {list_info_add_path}")
+    print(f"Found {new_jobs} new jobs out of {total_jobs} total jobs")
+    print(f"Saved new job list to {list_info_add_path}")
     comparing_status = 'Success'
     
 except Exception as e:
-    error_msg = f"Error in comparing process: "
-    print('Error in comparing process')
+    error_msg = f"Error in comparing process: {str(e)}"
+    print(f'Error in comparing process: {str(e)}')
     comparing_error_count += 1
     comparing_errors.append(error_msg)
     comparing_status = 'Failed'
@@ -556,7 +576,6 @@ write_end_log(
     error_count=comparing_error_count,
     error_details="; ".join(comparing_errors[-5:]) if comparing_errors else ""
 )
-
 
 ####################################
 # Detail code ######################
@@ -574,18 +593,13 @@ detail_error_count = 0
 detail_errors = []
 successful_details = 0
 
-def get_job_id(job_link):
-    match = re.search(r'view/(\d+)/', job_link)
-    if match:
-        return match.group(1)  # Lấy số job_id
-    return None
-
 
 def detail_scraping(link):
     global detail_error_count, detail_errors  # Declare as global at the beginning
     
     try:
         print(f"Đang xử lý link: {link}")
+        job_id = get_job_id(link)
         time.sleep(2)
         
         # job name
@@ -667,6 +681,7 @@ def detail_scraping(link):
         # job data
         job_data = {
             "job": {
+                "job_id" : job_id,
                 "company_name": company_name,
                 "company_href": company_href,
                 "job_name": name,
@@ -682,23 +697,34 @@ def detail_scraping(link):
         list_info_all = pd.read_csv(list_info_all_path)
         list_info_done = pd.read_csv(list_info_done_path)
 
-        # Thêm job_link vào list_info_all và list_info_done nếu chưa có
-        if link not in list_info_all['job_link'].values:
-            new_data_all = pd.DataFrame({"job_link": [link]})
+        if 'job_id' not in list_info_all.columns:
+             list_info_all['job_id'] = list_info_all['job_link'].apply(
+                get_job_id(link)
+            )
+        if 'job_id' not in list_info_done.columns:
+            list_info_done['job_id'] = list_info_done['job_link'].apply(
+                get_job_id(link)
+            )
+
+        # Check if job exists by job_id before adding
+        if job_id not in list_info_all['job_id'].values:
+            new_data_all = pd.DataFrame({"job_link": [link], "job_id": [job_id]})
             list_info_all = pd.concat([list_info_all, new_data_all], ignore_index=True)
+            print(f"Added job_id {job_id} to list_info_all")
 
-        if link not in list_info_done['job_link'].values:
-            new_data_done = pd.DataFrame({"job_link": [link]})
+        if job_id not in list_info_done['job_id'].values:
+            new_data_done = pd.DataFrame({"job_link": [link], "job_id": [job_id]})
             list_info_done = pd.concat([list_info_done, new_data_done], ignore_index=True)
+            print(f"Added job_id {job_id} to list_info_done")
 
-        # Lưu lại vào CSV
+        # Save back to CSV
         list_info_all.to_csv(list_info_all_path, index=False)
         list_info_done.to_csv(list_info_done_path, index=False)
-        print(f"Đã thêm dữ liệu vào list_info_all và list_info_done cho job_link: {link}")
 
-        #detailview_attempt_path
+        # Update detailview_attempt with job_id
         new_data = {
             "job_link": link,
+            "job_id": job_id,  # Add job_id to the CSV data
             "job_name": job_data["job"]["job_name"],
             "job_status": job_data["job"]["job_status"],
             "region": job_data["job"]["region"],
@@ -708,12 +734,35 @@ def detail_scraping(link):
             "hr_id": job_data["job"]["hr_id"],
             "jd": job_data["job"]["jd"]
         }
+        
         detailview_attempt = pd.read_csv(detailview_attempt_path)
+        
+        # Add job_id column if it doesn't exist in detailview_attempt
+        if 'job_id' not in detailview_attempt.columns:
+            detailview_attempt_columns = list(detailview_attempt.columns)
+            # Add job_id after job_link in the columns list
+            job_link_index = detailview_attempt_columns.index('job_link')
+            detailview_attempt_columns.insert(job_link_index + 1, 'job_id')
+            
+            # Create a new dataframe with the updated columns
+            new_detailview_attempt = pd.DataFrame(columns=detailview_attempt_columns)
+            
+            # Copy data from old dataframe to new one
+            for col in detailview_attempt.columns:
+                new_detailview_attempt[col] = detailview_attempt[col]
+            
+            # Add job_id column with empty values
+            new_detailview_attempt['job_id'] = new_detailview_attempt['job_link'].apply(
+                lambda x: re.search(r'view/(\d+)/', x).group(1) if re.search(r'view/(\d+)/', x) else None
+            )
+            
+            detailview_attempt = new_detailview_attempt
+        
+        # Add new job data
         detailview_attempt = pd.concat([detailview_attempt, pd.DataFrame([new_data])], ignore_index=True)
         detailview_attempt.to_csv(detailview_attempt_path, index=False)
 
-        job_id = get_job_id(link)
-        
+        # Use job_id for folder naming
         timestamp = time.strftime("%Y%m%d_%H%M%S")
         job_folder = os.path.join(detailview_dir, f"{job_id}_{timestamp}")
         os.makedirs(job_folder, exist_ok=True)
@@ -726,7 +775,7 @@ def detail_scraping(link):
         with open(json_file_path, "w", encoding="utf-8") as json_file:
             json.dump(job_data, json_file, indent=4, ensure_ascii=False)
 
-        print(f"Đã lưu dữ liệu cho {job_id} vào {job_folder}")
+        print(f"Đã lưu dữ liệu cho job_id {job_id} vào {job_folder}")
         print(json.dumps(job_data, indent=4, ensure_ascii=False))
         
         return True
