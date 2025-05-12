@@ -79,6 +79,19 @@ base_dir = r"C:\working\job_rcm\data\vietnamwork"
 merged_output_path = r'C:\working\job_rcm\data\preprocessed\vietnamwork\merged_data.json'
 csv_output_path = r'C:\working\job_rcm\data\preprocessed\vietnamwork\preprocessed_data.csv'
 
+# Tạo thư mục nếu chưa tồn tại
+os.makedirs(os.path.dirname(merged_output_path), exist_ok=True)
+
+# Tạo file JSON nếu chưa có
+if not os.path.exists(merged_output_path):
+    with open(merged_output_path, 'w', encoding='utf-8') as f:
+        json.dump([], f, ensure_ascii=False)
+
+# Tạo file CSV nếu chưa có
+if not os.path.exists(csv_output_path):
+    df = pd.DataFrame()
+    df.to_csv(csv_output_path, index=False, encoding='utf-8')
+
 # Bước 1: Duyệt qua các thư mục con chứa "Detailview" và lấy data.json
 all_ld_posts = []
 

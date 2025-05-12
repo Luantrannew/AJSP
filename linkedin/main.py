@@ -502,6 +502,9 @@ write_end_log(
 ####################################
 # Comparing code ###################
 ####################################
+####################################
+# Comparing code ###################
+####################################
 
 print("Start the comparing procedure")
 
@@ -541,20 +544,38 @@ try:
         # Save updated all data with job_id column
         list_info_all.to_csv(list_info_all_path, index=False)
 
-    # Update total jobs count
+    # Update total jobs count (before removing duplicates)
+    total_jobs_raw = len(list_info_attempt)
+    
+    # Remove duplicate job_ids within the attempt file itself
+    list_info_attempt = list_info_attempt.drop_duplicates(subset=['job_id'], keep='first')
+    
+    # Count after removing duplicates
     total_jobs = len(list_info_attempt)
+    duplicates_in_attempt = total_jobs_raw - total_jobs
+    if duplicates_in_attempt > 0:
+        print(f"Removed {duplicates_in_attempt} duplicate entries from the attempt file")
 
     # Create a set of existing job IDs for efficient comparison
     job_ids_all = set(list_info_all['job_id'].dropna())
+    
     # Filter out jobs that already exist in list_info_all based on job_id
     list_info_add = list_info_attempt[~list_info_attempt['job_id'].isin(job_ids_all)]
+    
     # Update new jobs count
     new_jobs = len(list_info_add)
     list_info_add_path = os.path.join(attempt_dir, "list_info_add.csv")
+    
     # Save the result to list_info_add.csv
     list_info_add.to_csv(list_info_add_path, index=False)
+    
+    # Add these new jobs to the all jobs file
+    if new_jobs > 0:
+        list_info_all = pd.concat([list_info_all, list_info_add], ignore_index=True)
+        list_info_all.to_csv(list_info_all_path, index=False)
+        print(f"Added {new_jobs} new jobs to the main database")
 
-    print(f"Found {new_jobs} new jobs out of {total_jobs} total jobs")
+    print(f"Found {new_jobs} new jobs out of {total_jobs} total jobs (after removing duplicates)")
     print(f"Saved new job list to {list_info_add_path}")
     comparing_status = 'Success'
     
@@ -595,12 +616,20 @@ successful_details = 0
 
 
 def detail_scraping(link):
-    global detail_error_count, detail_errors  # Declare as global at the beginning
+    global detail_error_count, detail_errors  
     
     try:
         print(f"Đang xử lý link: {link}")
         job_id = get_job_id(link)
-        time.sleep(2)
+        
+        # Check if job exists BEFORE doing any scraping work
+        list_info_all = pd.read_csv(list_info_all_path)
+        if 'job_id' not in list_info_all.columns:
+            list_info_all['job_id'] = list_info_all['job_link'].apply(get_job_id)
+        
+        if job_id in list_info_all['job_id'].values:
+            print(f"Job ID {job_id} already exists. Skipping...")
+            return False  # Skip this job
         
         # job name
         print('job_name')

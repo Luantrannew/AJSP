@@ -404,6 +404,10 @@ new_jobs = 0
 
 try :
     list_info_all_path = r'C:\working\job_rcm\data\vietnamwork\list_info_all.csv'
+    if not os.path.exists(list_info_all_path):
+        with open(list_info_all_path, "w", newline="", encoding="utf-8") as f:
+            writer = csv.writer(f)
+            writer.writerow(["job_link"])
     list_info_attempt = pd.read_csv(list_info_attempt_path)
     list_info_all = pd.read_csv(list_info_all_path)
 
